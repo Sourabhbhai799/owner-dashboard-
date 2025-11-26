@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+  import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import OrderCard from "@/components/OrderCard";
 import RevenueCard from "@/components/RevenueCard";
@@ -10,10 +10,62 @@ import { queryClient } from "@/lib/queryClient";
 import type { Order } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 
+
+// 🔐 PASSWORD PROTECTION (Frontend Only)
+const DASHBOARD_PASSWORD = "sourabh123"; // CHANGE YOUR PASSWORD HERE
+
+
 const BACKEND_URL = "https://nevolt-backend.onrender.com";
 const RESTAURANT_ID = "res-1";
 
 export default function Dashboard() {
+  // ------------------- LOGIN GATE -------------------
+  const [auth, setAuth] = useState(false);
+  const [pass, setPass] = useState("");
+
+  useEffect(() => {
+    if (localStorage.getItem("dash_pass_ok") === "true") {
+      setAuth(true);
+    }
+  }, []);
+
+  const login = () => {
+    if (pass === DASHBOARD_PASSWORD) {
+      localStorage.setItem("dash_pass_ok", "true");
+      setAuth(true);
+    } else {
+      alert("Wrong Password");
+    }
+  };
+
+  if (!auth) {
+    return (
+      <div className="flex items-center justify-center h-screen bg-gray-100">
+        <div className="p-6 rounded-2xl shadow-lg bg-white w-80">
+          <h2 className="text-xl font-bold mb-4 text-center">Dashboard Login</h2>
+
+          <input
+            type="password"
+            placeholder="Enter Password"
+            className="w-full border p-2 rounded mb-4"
+            value={pass}
+            onChange={(e) => setPass(e.target.value)}
+          />
+
+          <button
+            onClick={login}
+            className="w-full bg-black text-white p-2 rounded hover:opacity-80"
+          >
+            Login
+          </button>
+        </div>
+      </div>
+    );
+  }
+  // ------------------- LOGIN GATE END -------------------
+
+
+
   const { playNotificationSound } = useSound();
   const { toast } = useToast();
 
@@ -65,7 +117,7 @@ export default function Dashboard() {
     },
   });
 
-  // 🧠 Handle new order event
+  // 🧠 Handle new order events
   const handleNewOrder = useCallback(
     (order: Order) => {
       queryClient.setQueryData<Order[]>(["/api/orders"], (oldOrders = []) => {
@@ -83,7 +135,7 @@ export default function Dashboard() {
     [playNotificationSound, toast]
   );
 
-  // 🔔 WebSocket
+  // 🔔 WebSocket connection
   useWebSocket({
     url: BACKEND_URL.replace("http", "ws"),
     onMessage: (data) => {
@@ -106,7 +158,7 @@ export default function Dashboard() {
   const pendingOrders = filteredOrders.filter((o) => o.status === "pending");
   const completedOrders = filteredOrders.filter((o) => o.status === "completed");
 
-  // ✅ Revenue (backend field = total)
+  // 🧮 Revenue
   const totalRevenue = completedOrders.reduce((sum, o) => {
     const value =
       typeof o.total === "string"
