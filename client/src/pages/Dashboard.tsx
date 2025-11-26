@@ -1,4 +1,6 @@
-  import { useState, useEffect, useCallback } from "react";
+"use client";
+
+import { useState, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import OrderCard from "@/components/OrderCard";
 import RevenueCard from "@/components/RevenueCard";
@@ -10,61 +12,53 @@ import { queryClient } from "@/lib/queryClient";
 import type { Order } from "@shared/schema";
 import { Button } from "@/components/ui/button";
 
-
-// 🔐 PASSWORD PROTECTION (Frontend Only)
-const DASHBOARD_PASSWORD = "sourabh123"; // CHANGE YOUR PASSWORD HERE
-
-
 const BACKEND_URL = "https://nevolt-backend.onrender.com";
 const RESTAURANT_ID = "res-1";
 
+// 🚨 PASSWORD
+const DASHBOARD_PASSWORD = "nevolt123";
+
 export default function Dashboard() {
-  // ------------------- LOGIN GATE -------------------
-  const [auth, setAuth] = useState(false);
-  const [pass, setPass] = useState("");
+  // 🔐 LOGIN STATE
+  const [authenticated, setAuthenticated] = useState<boolean>(() => {
+    return localStorage.getItem("dashboard_auth") === "true";
+  });
 
-  useEffect(() => {
-    if (localStorage.getItem("dash_pass_ok") === "true") {
-      setAuth(true);
-    }
-  }, []);
+  const [password, setPassword] = useState("");
 
-  const login = () => {
-    if (pass === DASHBOARD_PASSWORD) {
-      localStorage.setItem("dash_pass_ok", "true");
-      setAuth(true);
-    } else {
-      alert("Wrong Password");
-    }
-  };
-
-  if (!auth) {
+  // If NOT logged in → show login screen only
+  if (!authenticated) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-100">
-        <div className="p-6 rounded-2xl shadow-lg bg-white w-80">
-          <h2 className="text-xl font-bold mb-4 text-center">Dashboard Login</h2>
+      <div className="p-6 flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl font-bold mb-4">Dashboard Login</h1>
 
-          <input
-            type="password"
-            placeholder="Enter Password"
-            className="w-full border p-2 rounded mb-4"
-            value={pass}
-            onChange={(e) => setPass(e.target.value)}
-          />
+        <input
+          type="password"
+          placeholder="Enter Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className="border p-2 rounded mb-4 w-64"
+        />
 
-          <button
-            onClick={login}
-            className="w-full bg-black text-white p-2 rounded hover:opacity-80"
-          >
-            Login
-          </button>
-        </div>
+        <Button
+          onClick={() => {
+            if (password === DASHBOARD_PASSWORD) {
+              localStorage.setItem("dashboard_auth", "true");
+              setAuthenticated(true);
+            } else {
+              alert("Incorrect password");
+            }
+          }}
+        >
+          Login
+        </Button>
       </div>
     );
   }
-  // ------------------- LOGIN GATE END -------------------
 
-
+  // ==============================
+  //  ONLY RUN AFTER LOGIN
+  // ==============================
 
   const { playNotificationSound } = useSound();
   const { toast } = useToast();
@@ -95,7 +89,7 @@ export default function Dashboard() {
     refetchInterval: 10000,
   });
 
-  // 🟡 Complete order mutation
+  // 🟡 Complete order
   const completeOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
       const res = await fetch(`${BACKEND_URL}/api/orders/${orderId}`, {
@@ -117,7 +111,7 @@ export default function Dashboard() {
     },
   });
 
-  // 🧠 Handle new order events
+  // 🧠 New Order Event
   const handleNewOrder = useCallback(
     (order: Order) => {
       queryClient.setQueryData<Order[]>(["/api/orders"], (oldOrders = []) => {
@@ -125,6 +119,7 @@ export default function Dashboard() {
         if (exists) return oldOrders;
         return [order, ...oldOrders];
       });
+
       setNewOrderIds((prev) => new Set(prev).add(order.id));
       playNotificationSound();
       toast({
@@ -135,7 +130,7 @@ export default function Dashboard() {
     [playNotificationSound, toast]
   );
 
-  // 🔔 WebSocket connection
+  // 🔔 WebSocket
   useWebSocket({
     url: BACKEND_URL.replace("http", "ws"),
     onMessage: (data) => {
@@ -143,7 +138,7 @@ export default function Dashboard() {
     },
   });
 
-  // Reset highlight after 5s
+  // Reset highlight after 5 sec
   useEffect(() => {
     if (newOrderIds.size > 0) {
       const timer = setTimeout(() => setNewOrderIds(new Set()), 5000);
@@ -158,7 +153,7 @@ export default function Dashboard() {
   const pendingOrders = filteredOrders.filter((o) => o.status === "pending");
   const completedOrders = filteredOrders.filter((o) => o.status === "completed");
 
-  // 🧮 Revenue
+  // Revenue (backend = total)
   const totalRevenue = completedOrders.reduce((sum, o) => {
     const value =
       typeof o.total === "string"
@@ -166,10 +161,11 @@ export default function Dashboard() {
         : typeof o.total === "number"
         ? o.total
         : 0;
+
     return sum + (isNaN(value) ? 0 : value);
   }, 0);
 
-  // 🔴 Reset logic
+  // Reset Logic
   const handleReset = () => {
     if (confirm("Do you want to reset the dashboard?")) {
       const latestId = Math.max(...orders.map((o) => o.id), 0);
@@ -179,10 +175,14 @@ export default function Dashboard() {
     }
   };
 
+  // ===================================
+  //  DASHBOARD UI
+  // ===================================
   return (
     <div className="p-4 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-bold">Dashboard</h1>
+
         <Button variant="destructive" onClick={handleReset}>
           Reset
         </Button>
@@ -232,4 +232,4 @@ export default function Dashboard() {
       </div>
     </div>
   );
-}
+    }
