@@ -15,18 +15,27 @@ import { Button } from "@/components/ui/button";
 const BACKEND_URL = "https://nevolt-backend.onrender.com";
 const RESTAURANT_ID = "res-1";
 
-// 🚨 PASSWORD
+// 🔐 SIMPLE FRONTEND PASSWORD
 const DASHBOARD_PASSWORD = "nevolt123";
 
 export default function Dashboard() {
-  // 🔐 LOGIN STATE
-  const [authenticated, setAuthenticated] = useState<boolean>(() => {
-    return localStorage.getItem("dashboard_auth") === "true";
-  });
-
+  const [authenticated, setAuthenticated] = useState(false);
   const [password, setPassword] = useState("");
+  const [loaded, setLoaded] = useState(false);
 
-  // If NOT logged in → show login screen only
+  // Load authentication from localStorage safely
+  useEffect(() => {
+    const saved = localStorage.getItem("dashboard_auth") === "true";
+    setAuthenticated(saved);
+    setLoaded(true);
+  }, []);
+
+  // Prevent blank screen during hydration
+  if (!loaded) return null;
+
+  // --------------------------
+  // LOGIN SCREEN
+  // --------------------------
   if (!authenticated) {
     return (
       <div className="p-6 flex flex-col items-center justify-center min-h-screen">
@@ -56,23 +65,29 @@ export default function Dashboard() {
     );
   }
 
-  // ==============================
-  //  ONLY RUN AFTER LOGIN
-  // ==============================
+  // --------------------------
+  // MAIN DASHBOARD STARTS HERE
+  // --------------------------
 
   const { playNotificationSound } = useSound();
   const { toast } = useToast();
 
   const [newOrderIds, setNewOrderIds] = useState<Set<string>>(new Set());
-  const [lastResetOrderId, setLastResetOrderId] = useState<number>(() =>
-    parseInt(localStorage.getItem("last_reset_order_id") || "0")
-  );
+  const [lastResetOrderId, setLastResetOrderId] = useState(0);
 
-  // 🟢 Fetch all orders
+  // Safe load reset state
+  useEffect(() => {
+    const saved = parseInt(localStorage.getItem("last_reset_order_id") || "0");
+    setLastResetOrderId(saved);
+  }, []);
+
+  // 🟢 Fetch Orders
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ["/api/orders"],
     queryFn: async () => {
-      const res = await fetch(`${BACKEND_URL}/api/orders?restaurant_id=${RESTAURANT_ID}`);
+      const res = await fetch(
+        `${BACKEND_URL}/api/orders?restaurant_id=${RESTAURANT_ID}`
+      );
       if (!res.ok) throw new Error("Failed to fetch orders");
       const data = await res.json();
 
@@ -89,7 +104,7 @@ export default function Dashboard() {
     refetchInterval: 10000,
   });
 
-  // 🟡 Complete order
+  // 🟡 Mark Completed
   const completeOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
       const res = await fetch(`${BACKEND_URL}/api/orders/${orderId}`, {
@@ -111,7 +126,7 @@ export default function Dashboard() {
     },
   });
 
-  // 🧠 New Order Event
+  // 🔔 NEW ORDER EVENT
   const handleNewOrder = useCallback(
     (order: Order) => {
       queryClient.setQueryData<Order[]>(["/api/orders"], (oldOrders = []) => {
@@ -130,7 +145,7 @@ export default function Dashboard() {
     [playNotificationSound, toast]
   );
 
-  // 🔔 WebSocket
+  // WS Connection
   useWebSocket({
     url: BACKEND_URL.replace("http", "ws"),
     onMessage: (data) => {
@@ -138,22 +153,21 @@ export default function Dashboard() {
     },
   });
 
-  // Reset highlight after 5 sec
+  // Remove highlight
   useEffect(() => {
-    if (newOrderIds.size > 0) {
-      const timer = setTimeout(() => setNewOrderIds(new Set()), 5000);
-      return () => clearTimeout(timer);
-    }
+    if (newOrderIds.size === 0) return;
+    const t = setTimeout(() => setNewOrderIds(new Set()), 5000);
+    return () => clearTimeout(t);
   }, [newOrderIds]);
 
   if (isLoading) return <div className="p-4 text-center">Loading orders...</div>;
 
-  // 🧩 Apply reset filter
+  // Filter
   const filteredOrders = orders.filter((o) => o.id > lastResetOrderId);
   const pendingOrders = filteredOrders.filter((o) => o.status === "pending");
   const completedOrders = filteredOrders.filter((o) => o.status === "completed");
 
-  // Revenue (backend = total)
+  // Revenue from "total" field
   const totalRevenue = completedOrders.reduce((sum, o) => {
     const value =
       typeof o.total === "string"
@@ -161,11 +175,10 @@ export default function Dashboard() {
         : typeof o.total === "number"
         ? o.total
         : 0;
-
     return sum + (isNaN(value) ? 0 : value);
   }, 0);
 
-  // Reset Logic
+  // Reset
   const handleReset = () => {
     if (confirm("Do you want to reset the dashboard?")) {
       const latestId = Math.max(...orders.map((o) => o.id), 0);
@@ -175,9 +188,7 @@ export default function Dashboard() {
     }
   };
 
-  // ===================================
-  //  DASHBOARD UI
-  // ===================================
+  // UI
   return (
     <div className="p-4 space-y-6">
       <div className="flex justify-between items-center">
@@ -217,7 +228,7 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Completed Orders */}
+      {/* Completed */}
       <div>
         <h2 className="text-xl font-semibold mb-2">Completed Orders</h2>
         {completedOrders.length === 0 ? (
@@ -232,4 +243,4 @@ export default function Dashboard() {
       </div>
     </div>
   );
-    }
+}
