@@ -13,7 +13,48 @@ import { Button } from "@/components/ui/button";
 const BACKEND_URL = "https://nevolt-backend.onrender.com";
 const RESTAURANT_ID = "res-1";
 
+const DASHBOARD_PASSWORD = "nevolt123";
+
 export default function Dashboard() {
+  // AUTH STATE
+  const [auth, setAuth] = useState(() => {
+    return localStorage.getItem("auth_pass") === "true";
+  });
+  const [password, setPassword] = useState("");
+
+  // If NOT authenticated → show login
+  if (!auth) {
+    return (
+      <div className="p-6 flex flex-col items-center justify-center min-h-screen">
+        <h1 className="text-2xl font-bold mb-4">Dashboard Login</h1>
+
+        <input
+          className="border p-2 rounded mb-4 w-64"
+          type="password"
+          placeholder="Enter Password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+
+        <Button
+          onClick={() => {
+            if (password === DASHBOARD_PASSWORD) {
+              localStorage.setItem("auth_pass", "true");
+              setAuth(true);
+            } else {
+              alert("Incorrect password");
+            }
+          }}
+        >
+          Login
+        </Button>
+      </div>
+    );
+  }
+
+  // =======================
+  // DASHBOARD ORIGINAL CODE
+  // =======================
   const { playNotificationSound } = useSound();
   const { toast } = useToast();
 
@@ -22,7 +63,6 @@ export default function Dashboard() {
     parseInt(localStorage.getItem("last_reset_order_id") || "0")
   );
 
-  // 🟢 Fetch all orders
   const { data: orders = [], isLoading } = useQuery<Order[]>({
     queryKey: ["/api/orders"],
     queryFn: async () => {
@@ -43,7 +83,6 @@ export default function Dashboard() {
     refetchInterval: 10000,
   });
 
-  // 🟡 Complete order mutation
   const completeOrderMutation = useMutation({
     mutationFn: async (orderId: string) => {
       const res = await fetch(`${BACKEND_URL}/api/orders/${orderId}`, {
@@ -65,7 +104,6 @@ export default function Dashboard() {
     },
   });
 
-  // 🧠 Handle new order event
   const handleNewOrder = useCallback(
     (order: Order) => {
       queryClient.setQueryData<Order[]>(["/api/orders"], (oldOrders = []) => {
@@ -83,7 +121,6 @@ export default function Dashboard() {
     [playNotificationSound, toast]
   );
 
-  // 🔔 WebSocket
   useWebSocket({
     url: BACKEND_URL.replace("http", "ws"),
     onMessage: (data) => {
@@ -91,7 +128,6 @@ export default function Dashboard() {
     },
   });
 
-  // Reset highlight after 5s
   useEffect(() => {
     if (newOrderIds.size > 0) {
       const timer = setTimeout(() => setNewOrderIds(new Set()), 5000);
@@ -101,23 +137,15 @@ export default function Dashboard() {
 
   if (isLoading) return <div className="p-4 text-center">Loading orders...</div>;
 
-  // 🧩 Apply reset filter
   const filteredOrders = orders.filter((o) => o.id > lastResetOrderId);
   const pendingOrders = filteredOrders.filter((o) => o.status === "pending");
   const completedOrders = filteredOrders.filter((o) => o.status === "completed");
 
-  // ✅ Revenue (backend field = total)
   const totalRevenue = completedOrders.reduce((sum, o) => {
-    const value =
-      typeof o.total === "string"
-        ? parseFloat(o.total)
-        : typeof o.total === "number"
-        ? o.total
-        : 0;
-    return sum + (isNaN(value) ? 0 : value);
+    const v = typeof o.total === "string" ? parseFloat(o.total) : o.total || 0;
+    return sum + (isNaN(v) ? 0 : v);
   }, 0);
 
-  // 🔴 Reset logic
   const handleReset = () => {
     if (confirm("Do you want to reset the dashboard?")) {
       const latestId = Math.max(...orders.map((o) => o.id), 0);
@@ -146,7 +174,6 @@ export default function Dashboard() {
         }
       />
 
-      {/* Active Orders */}
       <div>
         <h2 className="text-xl font-semibold mb-4">Active Orders</h2>
         {pendingOrders.length === 0 ? (
@@ -165,7 +192,6 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Completed Orders */}
       <div>
         <h2 className="text-xl font-semibold mb-2">Completed Orders</h2>
         {completedOrders.length === 0 ? (
@@ -180,4 +206,4 @@ export default function Dashboard() {
       </div>
     </div>
   );
-}
+                     }
