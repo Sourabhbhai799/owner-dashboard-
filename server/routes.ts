@@ -4,6 +4,7 @@ import { WebSocketServer, WebSocket } from "ws";
 import { storage } from "./storage";
 import { insertOrderSchema } from "@shared/schema";
 import { sampleOrders } from "./test-order";
+import { saveStripeKeys, getStripeKeys, updateOrderStatusToCash } from "./settings";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -41,6 +42,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
   }, 8000);
+
+  // ============================================
+  // EXISTING ROUTES (DO NOT MODIFY)
+  // ============================================
 
   app.get('/api/orders', async (req, res) => {
     try {
@@ -91,6 +96,79 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Server error updating order:', error);
       res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ============================================
+  // NEW ROUTES FOR PAYMENT SYSTEM
+  // ============================================
+
+  // POST /api/save-keys: Save Stripe public and secret keys
+  app.post('/api/save-keys', async (req, res) => {
+    try {
+      const { stripePublicKey, stripeSecretKey } = req.body;
+
+      if (!stripePublicKey || !stripeSecretKey) {
+        return res.status(400).json({ error: 'Both keys are required' });
+      }
+
+      const settings = await saveStripeKeys(stripePublicKey, stripeSecretKey);
+      res.json({
+        message: 'Stripe keys saved successfully',
+        keys: {
+          publicKey: settings.stripePublicKey,
+          lastUpdated: settings.lastUpdated,
+        },
+      });
+    } catch (error: any) {
+      console.error('Error saving keys:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // GET /api/get-keys: Retrieve Stripe public key only
+  app.get('/api/get-keys', async (req, res) => {
+    try {
+      const settings = await getStripeKeys();
+
+      if (!settings) {
+        return res.status(404).json({
+          message: 'No Stripe keys configured',
+          hasKeys: false,
+        });
+      }
+
+      // Return ONLY public key to frontend (never expose secret key)
+      res.json({
+        hasKeys: true,
+        stripePublicKey: settings.stripePublicKey,
+      });
+    } catch (error: any) {
+      console.error('Error fetching keys:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // POST /api/update-order-status: Update order status when cash is received
+  app.post('/api/update-order-status', async (req, res) => {
+    try {
+      const { orderId } = req.body;
+
+      if (!orderId) {
+        return res.status(400).json({ error: 'orderId is required' });
+      }
+
+      const updatedOrder = await updateOrderStatusToCash(orderId);
+      
+      broadcast({ type: 'ORDER_CONFIRMED', order: updatedOrder });
+
+      res.json({
+        message: 'Order marked as confirmed',
+        order: updatedOrder,
+      });
+    } catch (error: any) {
+      console.error('Error updating order status:', error);
+      res.status(404).json({ error: error.message });
     }
   });
 
