@@ -9,7 +9,9 @@ export const orders = pgTable("orders", {
   customerName: text("customer_name").notNull(),
   items: text("items").array().notNull(),
   totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
-  status: text("status").notNull().default("pending"),
+  status: text("status").notNull().default("pending"), // pending, confirmed, completed, cancelled
+  paymentMethod: text("payment_method").default("cash"), // cash, stripe
+  tableNo: integer("table_no"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
 });
 
